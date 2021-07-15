@@ -1,7 +1,7 @@
 local nums = {}
 
-nums.bn = require("nums.bn")
-nums.uintb = require("nums.uintb")
-nums.uintn = require("nums.uintn")
+nums.bn = require(script.bn)
+nums.uintb = require(script.uintb)
+nums.uintn = require(script.uintn)
 
 return nums

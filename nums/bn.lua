@@ -571,7 +571,7 @@ end
 --- Copy the value of a into b
 local function copy_bn(a, b)
     b._pos = a._pos
-    b._digits = {}
+    b._digits = table.create(#a._digits)
 
     for i=1,#a._digits do
         b._digits[i] = a._digits[i]
@@ -590,7 +590,6 @@ end
 local function tostring_int(a, base)
     local b
     local t = {}
-    local t2 = {}
     local w
     local u
     local pos
@@ -659,6 +658,7 @@ local function tostring_int(a, base)
 
     -- Since the digits in the BN are in order of lest to most and the base
     -- string is most to least we need to reverse the string.
+    local t2 = table.create(#t)
     for i=#t,1,-1 do
         t2[#t2+1] = t[i]
     end
@@ -1395,9 +1395,10 @@ end
 --
 -- @see asbytestring
 function M:asbytearray()
-    local t = {}
+    local len = self:len_bytes()
+    local t = table.create(len)
 
-    for i=self:len_bytes()-1,0,-1 do
+    for i=len-1,0,-1 do
         t[#t+1] = bit32.band(bit32.rshift(self, (i*8)), 0xFF):asnumber()
     end
     return t
