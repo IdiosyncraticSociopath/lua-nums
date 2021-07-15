@@ -114,16 +114,16 @@ local y = 0
 local z = 0
 while x > z do
     z = x
-    x = x << 1
+    x = bit32.lshift(x, 1)
     y = y + 1
 end
-DIGIT_BITS = ((y - 1)//2) - 1 -- Gives us 30 bits with Lua 5.3.
-local DIGIT_MASK = (1 << DIGIT_BITS) - 1
+DIGIT_BITS = math.floor((y - 1)/2) - 1 -- Gives us 30 bits with Lua 5.3.
+local DIGIT_MASK = bit32.lshift(1, DIGIT_BITS) - 1
 local DIGIT_MAX = DIGIT_MASK
 -- Carry needs to be 1 bit more than the digit because a carry will fill the
 -- next bit. Carry is always 1 bit more than DIGIT_BITS. We'll need to bring
 -- negative numbers back into range when dealing with subtraction.
-local DIGIT_CMASK = (1 << (DIGIT_BITS + 1)) - 1
+local DIGIT_CMASK = bit32.lshift(1, (DIGIT_BITS + 1)) - 1
 x = nil
 y = nil
 z = nil
@@ -312,9 +312,9 @@ local function add_int(a, b)
         -- Add the digits and the carry.
         c._digits[i] = a._digits[i] + b._digits[i] + u
         -- Calculate carry buy pulling it off the top of the digit.
-        u = c._digits[i] >> DIGIT_BITS
+        u = bit32.rshift(c._digits[i], DIGIT_BITS)
         -- Reduce the digit to the proper size by removing the carry.
-        c._digits[i] = c._digits[i] & DIGIT_MASK
+        c._digits[i] = bit32.band(c._digits[i], DIGIT_MASK)
     end
 
     -- Add the final carry if we have one.
@@ -348,11 +348,11 @@ local function sub_int(a, b)
         -- this was C and we were using an unsigned 32 bit integer as the digit
         -- type then it would handle wrapping internally. However, Lua doesn't
         -- have fixed size unsigned types so we need to handle wrapping.
-        c._digits[i] = (a._digits[i] - b._digits[i] - u) & DIGIT_CMASK
+        c._digits[i] = bit32.band((a._digits[i] - b._digits[i] - u), DIGIT_CMASK)
         -- Calculate carry buy pulling it off the top of the digit.
-        u = c._digits[i] >> DIGIT_BITS
+        u = bit32.rshift(c._digits[i], DIGIT_BITS)
         -- Reduce the digit to the proper size by removing the carry.
-        c._digits[i] = c._digits[i] & DIGIT_MASK
+        c._digits[i] = bit32.band(c._digits[i], DIGIT_MASK)
     end
 
     reduce(c)
@@ -444,17 +444,17 @@ local function div_remain(a, b)
     while e >= 0 do
         -- r is the remainder and it's also used for the drop down add.
         -- Shift it left one digit so it's the next field larger for the top.
-        r = r << 1
+        r = bit32.lshift(r, 1)
         -- Check if there is a bit set at this position in the dividend.
         -- If so we set the first bit in r as the drop down and add part.
-        if a & (M:new(1) << e) > 0 then
-            r = r | 1
+        if bit32.band(a, bit32.lshift(M:new(1), e)) > 0 then
+            r = bit32.bor(r, 1)
         end
         -- If r is larger than the divisor then we set r to the difference
         -- and add the difference to the quotient.
         if r >= b then
             r = r - b
-            q = q | (M:new(1) << e)
+            q = bit32.bor(q, bit32.lshift(M:new(1), e))
         end
         e = e - 1
     end
@@ -522,8 +522,8 @@ local function set_string(s, n)
         u = 0
         for i=1,#s._digits do
             s._digits[i] = (s._digits[i] * base) + u
-            u = s._digits[i] >> DIGIT_BITS
-            s._digits[i] = s._digits[i] & DIGIT_MASK
+            u = bit32.rshift(s._digits[i], DIGIT_BITS)
+            s._digits[i] = bit32.band(s._digits[i], DIGIT_MASK)
         end
         if u ~= 0 then
             s._digits[#s._digits+1] = u
@@ -531,16 +531,16 @@ local function set_string(s, n)
 
         -- Add the digit.
         s._digits[1] = s._digits[1] + b
-        u = s._digits[1] >> DIGIT_BITS
-        s._digits[1] = s._digits[1] & DIGIT_MASK
+        u = bit32.rshift(s._digits[1], DIGIT_BITS)
+        s._digits[1] = bit32.band(s._digits[1], DIGIT_MASK)
         -- Handle the carry from the add.
         for i=2,#s._digits do
             if u == 0 then
                 break
             end
             s._digits[i] = s._digits[i] + u
-            u = s._digits[i] >> DIGIT_BITS
-            s._digits[i] = s._digits[i] & DIGIT_MASK
+            u = bit32.rshift(s._digits[i], DIGIT_BITS)
+            s._digits[i] = bit32.band(s._digits[i], DIGIT_MASK)
         end
         if u ~= 0 then
             s._digits[#s._digits+1] = u
@@ -632,12 +632,12 @@ local function tostring_int(a, base)
         for i=#a._digits,1,-1 do
             -- Push the digit and the remainder from the last
             -- together.
-            w = (w << DIGIT_BITS) | a._digits[i]
+            w = bit32.bor(bit32.lshift(w, DIGIT_BITS), a._digits[i])
             if w >= base then
                 -- If the remainder is now larger than or equal to base we need
                 -- to divide the digit by the base. Then reduce the remainder
                 -- down so we have the new remainder.
-                u = w // base
+                u = math.floor(w / base)
                 w = w - (u * base)
             else
                 u = 0
@@ -760,9 +760,9 @@ M_mt.__mul =
                 -- product row we just update the final result row.
                 r = c._digits[i+y-1] + (a._digits[i] * b._digits[y]) + u
                 -- Calculate the carry.
-                u = r >> DIGIT_BITS
+                u = bit32.rshift(r, DIGIT_BITS)
                 -- Remove the carry (if there was one) from the digit.
-                c._digits[i+y-1] = r & DIGIT_MASK
+                c._digits[i+y-1] = bit32.band(r, DIGIT_MASK)
             end
 
             -- Set the carry as the next digit in the product.
@@ -776,7 +776,7 @@ M_mt.__div =
     -- This is an integer library so division will work the same as integer
     -- division.
     function(a, b)
-        return a // b
+        return math.floor(a / b)
     end
 M_mt.__mod =
     -- Modulus (not to be confused with C's modulus which is just the
@@ -863,11 +863,11 @@ M_mt.__pow =
         -- Go though each bit in b. 
         while b > 0 do
             -- If b is currently odd we multiply c with a. 
-            if b & 1 == d then
+            if bit32.band(b, 1) == d then
                 c = c * a
             end
             -- Shift be so we can check the next bit.
-            b = b >> 1
+            b = bit32.rshift(b, 1)
             -- Square a.
             a = a * a
         end
@@ -908,21 +908,21 @@ M_mt.__idiv =
 M_mt.__band =
     function(a, b)
         local function op(a, b)
-            return a & b
+            return bit32.band(a, b)
         end
         return bitwise_int(a, b, op)
     end
 M_mt.__bor =
     function(a, b)
         local function op(a, b)
-            return a | b
+            return bit32.bor(a, b)
         end
         return bitwise_int(a, b, op)
     end
 M_mt.__bxor =
     function(a, b)
         local function op(a, b)
-            return a ~ b
+            return bit32.bxor(a, b)
         end
         return bitwise_int(a, b, op)
     end
@@ -957,7 +957,7 @@ M_mt.__shl =
 
         -- Determine how many digits we could shift by and shift by that many
         -- digits.
-        c = b // DIGIT_BITS 
+        c = math.floor(b / DIGIT_BITS)
         a = lshiftd(a, c)
 
         -- Determine how many bits remain that have not been shifted during the
@@ -968,15 +968,15 @@ M_mt.__shl =
         end
 
         -- Generate a mask and how much we need to shift by.
-        mask = (1 << c) - 1
+        mask = bit32.lshift(1, c) - 1
         shift = DIGIT_BITS - c
 
         u = 0
         for i=1,#a._digits do
             -- Shift, and mask it down to the carry.
-            uu = (a._digits[i] >> shift) & mask
+            uu = bit32.band(bit32.rshift(a._digits[i], shift), mask)
             -- Shift and add the carry from the last operation.
-            a._digits[i] = ((a._digits[i] << c) | u) & DIGIT_MASK
+            a._digits[i] = bit32.band(bit32.bor(bit32.lshift(a._digits[i], c), u), DIGIT_MASK)
             -- Update our carry.
             u = uu
         end
@@ -1012,7 +1012,7 @@ M_mt.__shr =
 
         -- Determine how many digits we could shift by and shift by that many
         -- digits.
-        c = b // DIGIT_BITS 
+        c = math.floor(b / DIGIT_BITS)
         a = rshiftd(a, c)
 
         -- Determine how many bits remain that have not been shifted during the
@@ -1023,18 +1023,18 @@ M_mt.__shr =
         end
 
         -- Generate a mask and how much we need to shift by.
-        mask = (1 << c) - 1
+        mask = bit32.lshift(1, c) - 1
         shift = DIGIT_BITS - c
 
         u = 0
         for i=#a._digits,1,-1 do
             -- Mask off the amount we're shifting by.
-            uu = a._digits[i] & mask
+            uu = bit32.band(a._digits[i], mask)
             -- Move the value to the right since it's a right shift and add the
             -- carry onto the most significant side. The carry was the least
             -- significant side from the previous digit and the right of that
             -- is the most significant of the next digit.
-            a._digits[i] = (a._digits[i] >> c) | (u << shift)
+            a._digits[i] = bit32.bor(bit32.rshift(a._digits[i], c), bit32.lshift(u, shift))
             -- Update our carry.
             u = uu
         end
@@ -1066,7 +1066,7 @@ M_mt.__len =
 
         b = #a._digits * DIGIT_BITS
         b = b + (8 - (b % 8))
-        return b // 8
+        return math.floor(b / 8)
     end
 M_mt.__eq =
     function(a, b)
@@ -1237,7 +1237,7 @@ function M:len_bits()
     b = #self._digits * DIGIT_BITS
     -- Only the last digit can have less than the full number
     -- of bits set.
-    while c <= DIGIT_BITS-1 and (self._digits[#self._digits] & (1 << (DIGIT_BITS - c))) == 0 do
+    while c <= DIGIT_BITS-1 and bit32.band(self._digits[#self._digits], bit32.lshift(1, (DIGIT_BITS - c))) == 0 do
         c = c + 1
         b = b - 1
     end
@@ -1266,7 +1266,7 @@ function M:len_bytes()
     if bits % 8 ~= 0 then
         bits = bits + (8 - (bits % 8))
     end
-    return bits // 8
+    return math.floor(bits / 8)
 end
 
 --- The number of digits in the number in the given base.
@@ -1369,15 +1369,15 @@ function M:asnumber()
     -- the BN we can fit into the native number.
     while q > 0 do
         x = x+1
-        q = 1 << x
+        q = bit32.lshift(1, x)
     end
     x = x - 1
 
-    x = math.min(#self._digits, ((x+DIGIT_BITS-1)//DIGIT_BITS)-1)
+    x = math.min(#self._digits, (math.floor((x+DIGIT_BITS-1)/DIGIT_BITS))-1)
 
     q = self._digits[x]
     for i=x-1,1,-1 do
-        q = (q << DIGIT_BITS) | self._digits[i]
+        q = bit32.bor(bit32.lshift(q, DIGIT_BITS), self._digits[i])
     end
     if not self._pos then
         q = q * -1
@@ -1398,7 +1398,7 @@ function M:asbytearray()
     local t = {}
 
     for i=self:len_bytes()-1,0,-1 do
-        t[#t+1] = ((self >> (i*8)) & 0xFF):asnumber()
+        t[#t+1] = bit32.band(bit32.rshift(self, (i*8)), 0xFF):asnumber()
     end
     return t
 end
